@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# ollama-cli - A shell script wrapper for the OllamaShellTool
+# Save this file to your ~/bin directory and make it executable:
+# chmod +x ~/bin/ollama-cli
+
+# Configuration
+DEFAULT_MODEL="llama2"  # Change to your preferred default model
+JAR_PATH="$HOME/workdir/ollama-terminal/target/ollama-terminal-1.0-SNAPSHOT-jar-with-dependencies.jar"
+
+# Check if Ollama is running
+check_ollama() {
+    # Try a simple curl to the Ollama API
+    if ! curl -s "http://localhost:11434/api/tags" > /dev/null; then
+        echo "⚠️  Ollama service doesn't seem to be running"
+        echo "   Start Ollama with 'ollama serve' in another terminal"
+        return 1
+    fi
+    return 0
+}
+
+# Function to list available models
+list_models() {
+    echo "📋 Available models:"
+    curl -s "http://localhost:11434/api/tags" | grep -o '"name":"[^"]*"' | cut -d'"' -f4
+}
+
+# Parse command line options
+MODEL="$DEFAULT_MODEL"
+VERBOSE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --model|-m)
+            if [[ -n "$2" ]]; then
+                MODEL="$2"
+                shift 2
+            else
+                echo "Error: --model requires a model name"
+                exit 1
+            fi
+            ;;
+        --list|-l)
+            check_ollama && list_models
+            exit 0
+            ;;
+        --verbose|-v)
+            VERBOSE="--verbose"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: ollama-cli [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --model, -m MODEL    Specify the Ollama model to use (default: $DEFAULT_MODEL)"
+            echo "  --list, -l           List available models"
+            echo "  --verbose, -v        Enable verbose output"
+            echo "  --help, -h           Show this help message"
+            exit 0
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Ensure Java is installed
+if ! command -v java &> /dev/null; then
+    echo "❌ Java is not installed. Please install Java to run this tool."
+    exit 1
+fi
+
+# Check if the JAR file exists
+if [ ! -f "$JAR_PATH" ]; then
+    echo "❌ Could not find the OllamaShellTool JAR file at: $JAR_PATH"
+    echo "   Please build the project first with Maven:"
+    echo "   cd ~/ollama-terminal && mvn clean package"
+    exit 1
+fi
+
+# Check if Ollama is running
+if ! check_ollama; then
+    echo "Do you want to continue anyway? (y/n)"
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+# Run the Java application
+java -jar "$JAR_PATH" --model "$MODEL" $VERBOSE
